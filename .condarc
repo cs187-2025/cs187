@@ -1,0 +1,30 @@
+# CS187 Materials - Local Conda Configuration
+# This file automatically configures conda to use reliable channels
+# when working in the CS187 Materials directory.
+#
+# Students can use any conda distribution (Anaconda, Miniconda, Miniforge)
+# and this configuration will ensure packages install correctly.
+
+# Use conda-forge as the primary channel for reliability and completeness
+channels:
+  - conda-forge
+  - defaults  # Fallback for packages not in conda-forge
+
+# Strict channel priority ensures we get packages from conda-forge first
+# This prevents mixing packages from different channels which can cause conflicts
+channel_priority: strict
+
+# Show progress bars and channel info during installs
+show_channel_urls: true
+always_yes: false
+
+# Use faster libmamba solver if available (conda 4.12+)
+# This significantly speeds up dependency resolution
+experimental:
+  - jlap
+  - lock
+
+# Environment-specific settings
+create_default_packages:
+  - pip
+  - wheel 
