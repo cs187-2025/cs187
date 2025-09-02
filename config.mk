@@ -36,6 +36,3 @@ DEFAULT_BRANCH := master
 
 # Conda Environment Configuration Name
 CONDA_ENV_NAME := cs187-env
-
-# GitHub Classroom Configuration
-GITHUB_CLASSROOM_ID := 218409594

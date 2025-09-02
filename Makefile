@@ -163,6 +163,9 @@ install:
 		\
 		echo "Activating environment and installing Python packages..."; \
 		conda activate $(CONDA_ENV_NAME); \
+		\
+		echo "Configuring conda-forge as primary channel for $(CONDA_ENV_NAME)..."; \
+		conda config --env --prepend channels conda-forge; \
 		echo "Installing all packages via pip with caching..."; \
 		pip install --upgrade pip; \
 		pip install --cache-dir ~/.cache/pip -q -r requirements.txt; \

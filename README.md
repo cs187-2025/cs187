@@ -60,9 +60,6 @@ This script will:
 ```bash
 # For faster setup without PDF generation capabilities
 CS187_NO_PDFS=1 bash setup.sh
-
-# Or use the Makefile directly
-make install
 ```
 
 ### Step 3: Get Individual Assignments
@@ -79,14 +76,14 @@ git clone <your-lab1-1-repo-url> assignments/lab1-1
 git clone <your-project1-repo-url> assignments/project1
 ```
 
-**Important**: Always use GitHub Classroom links, never clone from the public `cs187-2025` organization repositories directly.
+**Important**: Always use GitHub Classroom links; never clone from the
+public `cs187-2025` organization repositories directly.
 
 ## Overview
 
-This project uses a **local `.condarc` file** to ensure reliable package 
-installation regardless of your existing conda setup. This approach is 
-gentle and preserves all your existing conda environments and 
-configurations.
+We use a **local `.condarc` file** to ensure reliable package 
+installation regardless of your existing conda setup. This approach 
+preserves all your existing conda environments and configurations.
 
 ## How It Works
 
@@ -106,7 +103,7 @@ automatically uses the local `.condarc` file which:
 ## What's Included
 
 - **`Makefile`**: Environment installation target
-- **`setup.sh`**: User-friendly setup script
+- **`setup.sh`**: Setup script
 - **`requirements.txt`**: All Python package dependencies
 - **`.condarc`**: Conda configuration for reliable package installation
 
@@ -142,49 +139,3 @@ installation cells.
 
 The environment setup ensures that all assignments use the same Python 
 packages and configuration.
-
-## Technical Details
-
-### Conda Configuration Hierarchy
-Conda searches for configuration in this order (highest priority first):
-1. **Command line flags** (`conda install -c conda-forge`)
-2. **Local directory** (`./.condarc`) ← **This is what we use**
-3. **User home** (`~/.condarc`)
-4. **System** (`/opt/conda/.condarc`)
-
-### What's in the Local `.condarc`
-```yaml
-channels:
-  - conda-forge  # Primary channel for reliability
-  - defaults     # Fallback for any missing packages
-
-channel_priority: strict  # Prevents mixing channels
-show_channel_urls: true  # Shows where packages come from
-```
-
-### Environment Isolation
-- The `<environment-name>` environment contains the packages needed for the course.
-- Removing it is simple: `conda env remove -n <environment-name>`
-- No impact on your other projects or environments
-
-## Why This Approach?
-
-### Compared to Installing New Conda
-- ✅ **Gentler**: Uses existing setup instead of replacing it
-- ✅ **Faster**: No need to download/install another conda distribution
-- ✅ **Cleaner**: No conflicts between multiple conda installations
-
-### Compared to Global Configuration Changes
-- ✅ **Safer**: Only affects CS187 project, not your entire system
-- ✅ **Reversible**: Remove the project and all changes are gone
-- ✅ **Isolated**: Other projects continue using your preferred 
-  settings
-
-### Compared to Manual Package Management
-- ✅ **Automatic**: Just `cd` to the directory and conda uses correct 
-  settings
-- ✅ **Reliable**: Eliminates channel conflicts and version mismatches
-- ✅ **Maintainable**: One configuration file for the entire class
-
-The local `.condarc` approach makes conda "just work" for CS187 while 
-respecting your existing setup! 🎉

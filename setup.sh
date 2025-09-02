@@ -12,14 +12,112 @@
 
 set -e  # Exit on any error
 
-# Load configuration
-make .tmp/config.env >/dev/null 2>&1
+# Function to check if a command exists
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+# Function to find and setup proper make command
+setup_make() {
+    # Check if we have a working GNU make
+    local make_cmd=""
+    
+    # Try different make commands in order of preference
+    for cmd in make gmake /opt/homebrew/bin/make /usr/local/bin/make; do
+        if command_exists "$cmd"; then
+            if "$cmd" --version 2>/dev/null | grep -q "GNU Make"; then
+                local version=$("$cmd" --version | head -1 | grep -o '[0-9]\+\.[0-9]\+')
+                if [ "$(printf '%s\n3.82\n' "$version" | sort -V | head -1)" = "3.82" ]; then
+                    make_cmd="$cmd"
+                    break
+                fi
+            fi
+        fi
+    done
+    
+    if [ -z "$make_cmd" ]; then
+        echo "❌ ERROR: GNU Make 3.82+ not found"
+        echo ""
+        echo "🔧 To fix this issue:"
+        echo "   1. Install GNU make: brew install make"
+        echo "   2. Create an alias for make:"
+        echo "      echo 'alias make=\"gmake\"' >> ~/.zshrc"
+        echo "   3. Reload your shell: source ~/.zshrc"
+        echo "   4. Try again: ./scripts/setup.sh"
+        echo ""
+        echo "💡 Alternative: Use gmake directly instead of make for CS187 commands"
+        echo "   Example: gmake lab1-1 instead of make lab1-1"
+        exit 1
+    fi
+    
+    # Export the working make command
+    export MAKE_CMD="$make_cmd"
+    echo "✅ Using GNU Make: $make_cmd ($($make_cmd --version | head -1))"
+    
+    # Provide helpful guidance if using gmake instead of make
+    if [[ "$make_cmd" == "gmake" ]] && [[ "$OSTYPE" == "darwin"* ]]; then
+        echo ""
+        echo "💡 Note: You're using 'gmake' (GNU Make installed via Homebrew)"
+        echo "   To use 'make' commands in CS187, either:"
+        echo "   • Use 'gmake' instead: gmake lab1-1"
+        echo "   • Or create an alias: echo 'alias make=\"gmake\"' >> ~/.zshrc"
+    fi
+}
+
+# Setup make and load configuration
+setup_make
+$MAKE_CMD .tmp/config.env >/dev/null 2>&1
 source .tmp/config.env
 
-# Check for dry-run mode
+# Parse command line arguments
 DRY_RUN=false
-if [[ "$1" == "--dry-run" ]]; then
-    DRY_RUN=true
+AUTO_YES=false
+
+for arg in "$@"; do
+    case $arg in
+        --dry-run)
+            DRY_RUN=true
+            ;;
+        --yes)
+            AUTO_YES=true
+            ;;
+        --help|-h)
+            echo "CS187 Environment Setup Script"
+            echo ""
+            echo "USAGE:"
+            echo "  bash scripts/setup.sh                # Interactive setup"
+            echo "  bash scripts/setup.sh --yes          # Non-interactive setup"
+            echo "  bash scripts/setup.sh --dry-run      # Preview what would be done"
+            echo ""
+            echo "OPTIONS:"
+            echo "  --yes       Skip confirmation prompts (useful for automation)"
+            echo "  --dry-run   Show what would be done without making changes"
+            echo "  --help      Show this help message"
+            echo ""
+            echo "DESCRIPTION:"
+            echo "  This script sets up the CS187 conda environment safely:"
+            echo "  • Uses existing conda installation or installs miniforge3"
+            echo "  • Initializes conda for your shell (makes 'conda' command available)"
+            echo "  • Creates/updates the cs187-env environment"
+            echo "  • Installs all required Python packages"
+            echo "  • Verifies the installation works correctly"
+            echo ""
+            echo "SAFETY:"
+            echo "  • Your existing conda environments are NOT touched"
+            echo "  • Script is idempotent - safe to run multiple times"
+            echo "  • Always use --dry-run first to preview changes"
+            echo ""
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $arg"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+done
+
+if [[ "$DRY_RUN" == "true" ]]; then
     echo "🔍 DRY RUN MODE - No changes will be made"
     echo "   This will show what the script would do without actually doing it"
     echo ""
@@ -42,23 +140,18 @@ echo ""
 # Check if we should proceed (skip in dry-run mode)
 if [[ "$DRY_RUN" == "true" ]]; then
     echo "⚠️  Dry-run mode: Skipping confirmation prompt"
-elif [[ "$1" != "--yes" && "$1" != "--dry-run" ]]; then
+elif [[ "$AUTO_YES" == "true" ]]; then
+    echo "⚠️  Auto-confirming setup (--yes flag provided)"
+else
     read -p "Continue with setup? (Y/n): " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Nn]$ ]]; then
         echo "❌ Setup cancelled."
         exit 1
     fi
-elif [[ "$1" == "--yes" ]]; then
-    echo "⚠️  Auto-confirming setup (--yes flag provided)"
 fi
 
 echo ""
-
-# Function to check if a command exists
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
-}
 
 # Function to find conda in common locations
 find_conda() {
@@ -209,48 +302,29 @@ else
     fi
 fi
 
-# Step 3: Verify .condarc file exists
+# Step 3: Initialize conda for your shell
+echo ""
+echo "🔧 Initializing conda for your shell..."
+USER_SHELL=$(basename "$SHELL")
+
+if [[ "$DRY_RUN" == "true" ]]; then
+    echo "  [DRY RUN] Would run: conda init $USER_SHELL"
+else
+    conda init "$USER_SHELL" >/dev/null 2>&1
+    echo "  ✅ Conda initialized for $USER_SHELL"
+fi
+
+# Step 4: Verify .condarc file exists
 echo ""
 echo "🔍 Verifying CS187 conda configuration..."
 
-# Get student's CS187 workspace directory (where this script is run)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [[ "$(basename "$SCRIPT_DIR")" == "scripts" ]]; then
-    # Script is in scripts/ subdirectory
-    WORKSPACE_DIR="$(dirname "$SCRIPT_DIR")"
-else
-    # Script is in the workspace root directory
-    WORKSPACE_DIR="$SCRIPT_DIR"
-fi
-CONDARC_PATH="$WORKSPACE_DIR/.condarc"
-
-if [ ! -f "$CONDARC_PATH" ]; then
-    echo "❌ ERROR: .condarc file not found in your CS187 workspace"
-    echo "   Expected location: $CONDARC_PATH"
-    echo ""
-    echo "📥 This file is required for reliable package installation."
-    echo "   It configures conda to use conda-forge channels for CS187."
-    echo ""
-    echo "🔧 How to fix:"
-    echo "   1. Make sure you're in your CS187 workspace directory"
-    echo "   2. Download .condarc from the course repository to this directory"
-    echo "   3. If using Git: ensure you have the latest course files"
-    echo ""
+if [ ! -f ".condarc" ]; then
+    echo "❌ ERROR: .condarc file not found - make sure you're in the CS187 workspace directory"
     exit 1
 fi
+echo "  ✅ .condarc file found"
 
-# Validate .condarc content
-if grep -q "conda-forge" "$CONDARC_PATH"; then
-    echo "  ✅ .condarc file found with conda-forge channel configured"
-else
-    echo "  ⚠️  WARNING: .condarc exists but doesn't contain conda-forge channel"
-    echo "     This may cause package installation issues"
-fi
-
-echo "  Configuration preview:"
-echo "    $(grep -A 2 "channels:" "$CONDARC_PATH" | sed 's/^/    /')"
-
-# Step 4: Verify conda channel configuration (before make install)
+# Step 5: Verify conda channel configuration (before make install)
 echo ""
 echo "🔧 Verifying conda channel configuration..."
 
@@ -276,14 +350,14 @@ else
     echo "  Channel priority: $(conda config --show channel_priority | grep -o 'strict\|flexible')"
 fi
 
-# Step 5: Install packages and dependencies using Makefile
+# Step 6: Install packages and dependencies using Makefile
 echo ""
 echo "🚀 Installing packages and dependencies via Makefile..."
 
 # Change to the student's CS187 workspace directory
 if [[ "$DRY_RUN" == "true" ]]; then
     echo "  [DRY RUN] Would change directory to: $WORKSPACE_DIR"
-    echo "  [DRY RUN] Would run: make install"
+    echo "  [DRY RUN] Would run: $MAKE_CMD install"
     echo "  [DRY RUN] This would:"
     echo "     • Verify conda is available (exits with error if not found)"
     echo "     • Install system dependencies (git, pandoc, graphviz)"
@@ -314,7 +388,7 @@ else
         echo "  This handles system dependencies, conda environment, and all packages..."
     fi
 
-    if ! make install; then
+    if ! $MAKE_CMD install; then
         echo ""
         echo "❌ ERROR: Makefile installation failed!"
         echo "   The 'make install' command handles all complex dependency installation."
@@ -324,7 +398,7 @@ else
         echo "   • Make sure you're in your CS187 workspace directory"
         echo "   • Check that Makefile exists and is readable"
         echo "   • Ensure you have make installed (brew install make on macOS)"
-        echo "   • Try running 'make install' manually for more detailed output"
+        echo "   • Try running '$MAKE_CMD install' manually for more detailed output"
         exit 1
     fi
 
@@ -332,19 +406,26 @@ else
     echo "     System dependencies, Python packages, and Playwright all configured"
 fi
 
-# Step 6: Verify installation
+# Step 7: Verify installation
 echo ""
 echo "🧪 Verifying installation..."
 
 if [[ "$DRY_RUN" == "true" ]]; then
-    echo "  [DRY RUN] Would verify Python installation and packages"
-    echo "  [DRY RUN] Would check: Python version, location, environment"
-    echo "  [DRY RUN] Would test imports: torch, jupyter, otter"
+    echo "  [DRY RUN] Would verify Python installation and environment"
+    echo "  [DRY RUN] Would check: Python version, location, conda environment"
     echo "  [DRY RUN] Would verify conda channels configuration"
     echo "  [DRY RUN] Expected environment: $CONDA_ENV_NAME"
     echo "  [DRY RUN] Expected conda: $CONDA_DIR"
     echo "  [DRY RUN] Expected distribution: $CONDA_TYPE"
 else
+    # Activate the cs187-env environment for verification
+    echo "  Activating $CONDA_ENV_NAME environment for verification..."
+    if conda activate $CONDA_ENV_NAME 2>/dev/null; then
+        echo "  ✅ Successfully activated $CONDA_ENV_NAME"
+    else
+        echo "  ⚠️  Could not activate $CONDA_ENV_NAME, verification may be inaccurate"
+        echo "     Continuing with current environment..."
+    fi
     echo -n "  Python version: "
     python --version
     
@@ -369,157 +450,61 @@ else
     fi
     
     echo "  Effective channels (what conda actually uses here):"
-    conda config --show channels | head -3 | sed 's/^/    /'
-    
-    echo -n "  PyTorch: "
-    if python -c "import torch; print('✅ v' + torch.__version__)" 2>/dev/null; then
-        :
+    # Show channels from the local .condarc file (if it exists)
+    if [ -f "$CONDARC_PATH" ]; then
+        echo "    Using local .condarc configuration:"
+        grep -A 5 "channels:" "$CONDARC_PATH" | sed 's/^/    /'
     else
-        echo "❌ Not available"
-    fi
-    
-    echo -n "  Jupyter: "
-    if command_exists jupyter; then
-        echo "✅ Available"
-    else
-        echo "❌ Not available"
-    fi
-    
-    echo -n "  Otter-grader: "
-    if python -c "import otter; print('✅ Available')" 2>/dev/null; then
-        :
-    else
-        echo "❌ Not available"
+        echo "    Using global configuration:"
+        conda config --show channels | head -3 | sed 's/^/    /'
     fi
 fi
 
-# Step 7: Test basic functionality
+# Step 8: Test basic functionality
+
 echo ""
 echo "🎯 Testing basic functionality..."
 
 if [[ "$DRY_RUN" == "true" ]]; then
-    echo "  [DRY RUN] Would create temporary test environment"
-    echo "  [DRY RUN] Would test Python package imports"
+    echo "  [DRY RUN] Would test core packages: torch, otter, jupyter, numpy, nltk"
+    echo "  [DRY RUN] Would verify conda channel configuration"
     echo "  [DRY RUN] Would test conda environment functionality"
-    echo "  [DRY RUN] Would verify key packages: torch, jupyter, otter"
+    echo "  [DRY RUN] All tests would run using: conda run -n $CONDA_ENV_NAME"
 else
-    echo "  Creating self-contained test environment..."
-    
-    # Create temporary directory for testing
-    TEST_DIR=$(mktemp -d)
-    echo "  Test directory: $TEST_DIR"
-    
-    # Create a simple test script
-    cat > "$TEST_DIR/test_cs187_env.py" << 'EOF'
-#!/usr/bin/env python3
-"""
-CS187 Environment Test Script
-Tests that all required packages are available and working.
-"""
-
+    echo "  Testing core packages..."
+    if conda run -n $CONDA_ENV_NAME python -c "
 import sys
-import importlib
-
-def test_import(package_name, description=""):
-    """Test if a package can be imported."""
-    try:
-        importlib.import_module(package_name)
-        print(f"  ✅ {package_name} - {description}")
-        return True
-    except ImportError as e:
-        print(f"  ❌ {package_name} - {description} (FAILED: {e})")
-        return False
-
-def main():
-    print("🧪 CS187 Environment Test")
-    print("=" * 30)
-    
-    # Test Python version
-    python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
-    print(f"  Python version: {python_version}")
-    
-    if sys.version_info >= (3, 10):
-        print("  ✅ Python version is 3.10+ (compatible)")
-    else:
-        print("  ⚠️  Python version is older than 3.10 (may have issues)")
-    
-    print("\n📦 Testing package imports:")
-    
-    # Core packages
-    results = []
-    results.append(test_import("pip", "Package installer"))
-    results.append(test_import("wheel", "Built package format"))
-    
-    # Jupyter ecosystem
-    results.append(test_import("jupyter", "Jupyter notebook environment"))
-    results.append(test_import("jupyterlab", "JupyterLab interface"))
-    results.append(test_import("nbconvert", "Notebook conversion"))
-    results.append(test_import("ipywidgets", "Interactive widgets"))
-    
-    # Data science stack
-    results.append(test_import("numpy", "Numerical computing"))
-    results.append(test_import("pandas", "Data analysis"))
-    results.append(test_import("matplotlib", "Plotting library"))
-    results.append(test_import("sklearn", "Machine learning (scikit-learn)"))
-    
-    # Deep learning
-    results.append(test_import("torch", "PyTorch deep learning"))
-    results.append(test_import("transformers", "Hugging Face transformers"))
-    
-    # NLP specific
-    results.append(test_import("nltk", "Natural Language Toolkit"))
-    
-    # CS187 specific
-    results.append(test_import("otter", "Otter grader"))
-    
-    # PDF generation
-    playwright_available = test_import("playwright", "Browser automation for PDFs")
-    
-    print(f"\n📊 Test Results:")
-    passed = sum(results)
-    total = len(results)
-    print(f"  Packages: {passed}/{total} passed")
-    
-    if playwright_available:
-        print("  🎭 PDF generation should work")
-    else:
-        print("  ⚠️  PDF generation may not work (Playwright missing)")
-    
-    if passed == total:
-        print("\n🎉 All tests passed! Environment is ready for CS187.")
-        return 0
-    elif passed >= total * 0.8:  # 80% threshold
-        print(f"\n⚠️  Most tests passed ({passed}/{total}). Environment should work for most CS187 tasks.")
-        return 0
-    else:
-        print(f"\n❌ Many tests failed ({total-passed}/{total}). Environment needs attention.")
-        return 1
-
-if __name__ == "__main__":
-    sys.exit(main())
-EOF
-    
-    # Run the test script
-    echo "  Running comprehensive package test..."
-    if python "$TEST_DIR/test_cs187_env.py"; then
-        echo "  ✅ Environment test passed"
+try:
+    import torch, otter, jupyter, numpy, nltk
+    print('  ✅ All core packages available (torch, otter, jupyter, numpy, nltk)')
+    print('  🎉 Environment is ready for CS187!')
+except ImportError as e:
+    print(f'  ❌ Missing package: {e}')
+    print('  ⚠️  Environment needs attention')
+    sys.exit(1)
+"; then
+        echo "  ✅ Package test passed"
         TEST_RESULT="✅ PASSED"
     else
-        echo "  ⚠️  Environment test had issues (see details above)"
+        echo "  ⚠️  Package test failed"
         TEST_RESULT="⚠️ ISSUES"
     fi
     
     # Test conda channel configuration
     echo ""
     echo "  Testing conda channel configuration..."
-    if conda config --show channels | head -1 | grep -q conda-forge; then
-        echo "  ✅ conda-forge is primary channel"
+    # Check the environment-specific channel configuration
+    if conda run -n $CONDA_ENV_NAME conda config --show channels | head -1 | grep -q conda-forge; then
+        echo "  ✅ conda-forge is primary channel (environment-specific)"
+    elif [ -f "$CONDARC_PATH" ] && grep -A 10 "channels:" "$CONDARC_PATH" | grep -E "^\s*-\s*conda-forge" | head -1 >/dev/null; then
+        echo "  ✅ conda-forge is configured (from local .condarc)"
+        echo "     Note: May be overridden by global settings"
     else
         echo "  ⚠️  conda-forge is not the primary channel"
         echo "     This may cause package conflicts later"
     fi
     
-    # Test a simple conda install/uninstall to verify environment works
+    # Test conda environment functionality
     echo ""
     echo "  Testing conda environment functionality..."
     if conda install -n $CONDA_ENV_NAME --dry-run numpy >/dev/null 2>&1; then
@@ -528,15 +513,11 @@ EOF
         echo "  ⚠️  Conda environment may have dependency resolution issues"
     fi
     
-    # Clean up test directory
-    rm -rf "$TEST_DIR"
-    echo "  Test cleanup completed"
-    
     echo ""
-    echo "🏁 Self-contained test summary: $TEST_RESULT"
+    echo "🏁 Environment test summary: $TEST_RESULT"
 fi
 
-# Step 8: Check for potential conflicts
+# Step 9: Check for potential conflicts
 echo ""
 echo "🔍 Checking for potential environment conflicts..."
 
@@ -565,7 +546,7 @@ else
     fi
 fi
 
-# Step 9: Success and usage instructions
+# Step 10: Success and usage instructions
 echo ""
 if [[ "$DRY_RUN" == "true" ]]; then
     echo "🔍 Dry Run Complete!"
@@ -595,17 +576,20 @@ else
 fi
 echo ""
 echo "📝 Usage Instructions:"
-echo "   1. Activate the environment:"
+echo "   1. Restart your terminal or run: source ~/.${USER_SHELL}rc"
+echo "      (Future terminals won't need to do this)"
+echo ""
+echo "   2. Activate the environment:"
 echo "      conda activate $CONDA_ENV_NAME"
 echo ""
-echo "   2. Navigate to your CS187 workspace:"
+echo "   3. Navigate to your CS187 workspace:"
 echo "      cd '$WORKSPACE_DIR'"
 echo ""
-echo "   3. Launch Jupyter:"
+echo "   4. Launch Jupyter:"
 echo "      jupyter lab"
 echo ""
-echo "   4. Test the environment:"
-echo "      python scripts/test-playwright.py  # Test PDF generation"
+echo "   5. Test the environment:"
+echo "      python -c \"import torch, otter, nltk; print('✅ Environment test passed!')\""
 echo ""
 echo "🔄 To update the environment later:"
 echo "   Run this script again - it will update packages safely"
@@ -613,12 +597,12 @@ echo ""
 echo "🧹 To remove only the CS187 environment:"
 echo "   conda env remove -n $CONDA_ENV_NAME"
 echo ""
-echo "🎭 If Playwright/PDF generation doesn't work:"
-echo "   • Run diagnostic: python scripts/test-playwright.py"
+echo "🎭 If PDF generation doesn't work in Jupyter:"
+echo "   • Try: File → Export → HTML instead of PDF"
 echo "   • Linux: sudo apt install libnss3 libatk-bridge2.0-0 libxss1 libasound2"
 echo "   • macOS: brew install --cask chromium"
 echo "   • Manual: playwright install chromium"
-echo "   • Alternative: Use 'File → Export → HTML' instead of PDF"
+echo "   • Contact course staff if issues persist"
 echo ""
 echo "💡 Your existing conda installation and environments are unchanged!"
 echo "   The local .condarc file configures conda-forge channels only when"
