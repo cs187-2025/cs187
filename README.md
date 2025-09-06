@@ -33,12 +33,13 @@ First, you'll need to get the CS187 environment setup files. **Do NOT clone the 
 Once you have access to your CS187 environment repository, clone it to your local machine:
 
 ```bash
-git clone <your-github-classroom-repo-url>
+git clone <your-github-classroom-repo-url> <your-repo-name>
 cd <your-repo-name>
 ```
+(We suggest "cs187" for <your-repo-name>. The <your-github-classroom-repo-url> is provided by visitng the Github repo that you were provided by Github Classroom.)
 
 This repository contains the common setup files needed for all CS187 
-assignments. You'll put the individual assignments in the `assignments` 
+assignments. You'll put the individual assignments (labs and project segments) in an `assignments` 
 subdirectory.
 
 ### Step 2: Set Up Your Environment
@@ -64,69 +65,50 @@ CS187_NO_PDFS=1 bash setup.sh
 
 ### Step 3: Get Individual Assignments
 
+You'll want to start by getting the zero-th lab, lab 0-0, which tests that the setup process has worked properly.
+
 For each assignment you need to work on, you'll get access through GitHub Classroom. **Do NOT clone the public repositories directly** - instead, use the GitHub Classroom links provided by your instructor for each assignment.
 
 Once you have access to an assignment repository, clone it to your local machine:
 
 ```bash
-# Example: After getting Lab 1.1 through GitHub Classroom
-git clone <your-lab1-1-repo-url> assignments/lab1-1
+# Example: After getting Lab 0-0 through GitHub Classroom
+git clone <your-lab0-0-repo-url> assignments/lab0-0
 
 # Example: After getting Project 1 through GitHub Classroom  
 git clone <your-project1-repo-url> assignments/project1
 ```
 
-**Important**: Always use GitHub Classroom links; never clone from the
-public `cs187-2025` organization repositories directly.
-
-## Overview
-
-We use a **local `.condarc` file** to ensure reliable package 
-installation regardless of your existing conda setup. This approach 
-preserves all your existing conda environments and configurations.
-
-## How It Works
-
-### Local Configuration Overrides
-When you run conda commands from the CS187 Materials directory, conda 
-automatically uses the local `.condarc` file which:
-- Sets `conda-forge` as the primary channel
-- Uses strict channel priority to prevent package conflicts
-- Ensures PyTorch, Jupyter, and other packages install correctly
-
-### Your Setup Remains Unchanged
-- ✅ Your global conda configuration is preserved
-- ✅ Your existing environments are untouched  
-- ✅ Works with any conda distribution (Anaconda, Miniconda, Miniforge)
-- ✅ No system-wide changes or installations required
-
-## What's Included
+## What's included in this repository
 
 - **`Makefile`**: Environment installation target
 - **`setup.sh`**: Setup script
 - **`requirements.txt`**: All Python package dependencies
 - **`.condarc`**: Conda configuration for reliable package installation
 
-## Daily Usage
+## Daily usage
 
 ```bash
 # Always work from the CS187 directory
 cd /path/to/CS187
 
-# Activate the CS187 environment
+# Activate the CS187 environment (if not already activated)
 conda activate <environment-name>
 
 # Launch Jupyter (will use correct packages)
 jupyter lab
 ```
 
-### Working on Assignments
+### Working on assignments
 
-When working on a specific assignment:
+When working on a specific assignment (for example, lab 1-1):
 
 ```bash
 # Navigate to the assignment directory
 cd assignments/lab1-1
+
+# Activate the CS187 environment (if not already activated)
+conda activate <environment-name>
 
 # Open the notebook
 jupyter lab lab1-1.ipynb
