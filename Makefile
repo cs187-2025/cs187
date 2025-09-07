@@ -34,6 +34,17 @@ ifdef NO_PDFS
   NO_PDFS := 1
 endif
 
+# Generate bash configuration for deploy scripts
+# =============================================================================
+# This target converts the master config.mk to bash-compatible format for
+# use by setup.sh and other shell scripts. The generated file is automatically
+# updated whenever config.mk changes.
+# =============================================================================
+.tmp/config.env: config.mk scripts/mk2bash.py
+	@echo "=== Generating bash configuration from config.mk ==="
+	@mkdir -p .tmp
+	python3 scripts/mk2bash.py config.mk > .tmp/config.env
+
 # Installation target for GitHub Actions and local development
 # 
 # This target handles the complete setup of the development environment:
@@ -315,12 +326,12 @@ install:
 		echo "ERROR: Conda installation failed or not found in PATH"; \
 		echo "Checked paths: $$PATH"; \
 		exit 1; \
-	fi
-
-	@echo "=== Installation complete ==="
-	@echo "Environment '$(CONDA_ENV_NAME)' is ready for use"
-	@echo "Jupyter kernel '$(CONDA_ENV_NAME)' has been registered"
-	@echo "Run 'conda activate $(CONDA_ENV_NAME)' to activate the environment"
+	fi; \
+	\
+	echo "=== Installation complete ==="; \
+	echo "Environment '$(CONDA_ENV_NAME)' is ready for use"; \
+	echo "Jupyter kernel '$(CONDA_ENV_NAME)' has been registered"; \
+	echo "Run 'conda activate $(CONDA_ENV_NAME)' to activate the environment"
 
 # Help target for standalone usage
 install-help:
