@@ -100,151 +100,82 @@ install:
 	elif [ -f /etc/debian_version ]; then \
 		echo "=== Ubuntu/Debian detected - Installing system dependencies ==="; \
 		\
-		echo "=== Network connectivity test ==="; \
-		INTERNET_OK=false; \
-		REPOS_OK=false; \
-		\
-		echo "Testing basic internet connectivity..."; \
-		if ping -c 2 8.8.8.8 >/dev/null 2>&1; then \
-			echo "Internet: ACCESSIBLE"; \
-			INTERNET_OK=true; \
-		else \
-			echo "Internet: BLOCKED/LIMITED"; \
-			echo "  - Cannot reach 8.8.8.8 (Google DNS)"; \
-		fi; \
-		\
-		echo "Testing Ubuntu repository access..."; \
-		if ping -c 2 archive.ubuntu.com >/dev/null 2>&1; then \
-			echo "Ubuntu repos: ACCESSIBLE"; \
-			REPOS_OK=true; \
-		else \
-			echo "Ubuntu repos: BLOCKED/LIMITED"; \
-			echo "  - Cannot reach archive.ubuntu.com"; \
-		fi; \
-		\
-		echo "Additional diagnostics:"; \
-		echo "  - Available packages test:"; \
-		for pkg in pandoc inkscape graphviz; do \
-			if command -v $$pkg >/dev/null 2>&1; then \
-				echo "    $$pkg: PRE-INSTALLED"; \
-			else \
-				echo "    $$pkg: Not available"; \
-			fi; \
-		done; \
-		echo "  - Python environment test:"; \
-		if command -v python3 >/dev/null 2>&1; then \
-			echo "    python3: Available ($(python3 --version 2>&1))"; \
-		else \
-			echo "    python3: Not available"; \
-		fi; \
-		echo "  - Network troubleshooting:"; \
-		echo "    Testing specific service connectivity:"; \
-		if curl -s --connect-timeout 5 https://pypi.org >/dev/null 2>&1; then \
-			echo "    PyPI (pypi.org): ACCESSIBLE"; \
-		else \
-			echo "    PyPI (pypi.org): BLOCKED"; \
-		fi; \
-		if curl -s --connect-timeout 5 https://files.pythonhosted.org >/dev/null 2>&1; then \
-			echo "    PyPI files: ACCESSIBLE"; \
-		else \
-			echo "    PyPI files: BLOCKED"; \
-		fi; \
-		echo "    This appears to be a security-hardened environment with selective network access."; \
-		echo "    Python packages (pip) may work while system packages (apt) are blocked."; \
-		\
-		if [ "$$INTERNET_OK" = false ] || [ "$$REPOS_OK" = false ]; then \
-			echo ""; \
-			echo "========================================"; \
-			echo "WARNING: Limited network connectivity"; \
-			echo "========================================"; \
-			echo "Network access is restricted in this environment."; \
-			echo ""; \
-			echo "Status:"; \
-			echo "  Internet (8.8.8.8): $$INTERNET_OK"; \
-			echo "  Ubuntu repos: $$REPOS_OK"; \
-			echo ""; \
-			echo "Impact:"; \
-			echo "  - System packages (pandoc, inkscape, graphviz) will be skipped"; \
-			echo "  - Python packages (pip install) should still work"; \
-			echo "  - Core Python environment will still be set up"; \
-			echo "  - Autograder functionality should work normally"; \
-			echo ""; \
-			echo "This appears to be a security-hardened environment with selective"; \
-			echo "network restrictions (Python repos allowed, system repos blocked)."; \
-			echo "Continuing with available resources..."; \
-			echo ""; \
-		else \
-			echo "Network connectivity: OK"; \
-		fi; \
+		# Detect sudo availability \
+		if command -v sudo >/dev/null 2>&1; then SUDO=sudo; else SUDO=""; fi; \
+		echo "Using sudo: $$SUDO"; \
 		echo ""; \
 		\
+		# Update package lists (like pip install does) \
 		echo "Updating package lists..."; \
-		if command -v sudo >/dev/null 2>&1; then SUDO=sudo; else SUDO=""; fi; \
 		if $$SUDO apt-get update; then \
 			echo "apt-get update: SUCCESS"; \
 		else \
-			echo "apt-get update: FAILED - network connectivity issues may prevent package installation"; \
+			echo "apt-get update: FAILED"; \
+			echo "Continuing anyway (packages may still install from cache)..."; \
 		fi; \
+		echo ""; \
 		\
-		if [ "$$INTERNET_OK" = true ] && [ "$$REPOS_OK" = true ]; then \
-			echo "Installing core development tools via apt..."; \
-			\
-			# Essential packages (required for core functionality) \
-			for pkg in build-essential git; do \
-				if dpkg -s $$pkg >/dev/null 2>&1; then \
-					echo "$$pkg already installed."; \
+		# Install core development tools \
+		echo "Installing core development tools..."; \
+		for pkg in build-essential git; do \
+			if ! dpkg -s $$pkg >/dev/null 2>&1; then \
+				echo "Installing $$pkg..."; \
+				if $$SUDO apt-get install -y $$pkg; then \
+					echo "✅ $$pkg: INSTALLATION SUCCESS"; \
 				else \
-					echo "Installing $$pkg..."; \
-					$$SUDO apt-get install -y $$pkg >/dev/null 2>&1; \
-					echo "$$pkg installation completed."; \
+					echo "❌ $$pkg: INSTALLATION FAILED"; \
+					echo "   Error: Package installation failed"; \
 				fi; \
-			done; \
-			\
-			echo "Installing document processing and visualization tools..."; \
-			for pkg in pandoc inkscape graphviz; do \
-				if dpkg -s $$pkg >/dev/null 2>&1; then \
-					echo "$$pkg already installed."; \
-				else \
-					echo "Attempting to install $$pkg..."; \
-					if $$SUDO apt-get install -y $$pkg >/dev/null 2>&1; then \
-						echo "  $$pkg: INSTALLATION SUCCESS"; \
-					else \
-						echo "  $$pkg: INSTALLATION FAILED"; \
-						echo "  Note: This may be due to network connectivity issues in restricted environments."; \
-						echo "  Core functionality will work without this package."; \
-					fi; \
-				fi; \
-			done; \
-		else \
-			echo "Skipping system package installation due to network restrictions."; \
-			echo "Checking for pre-installed packages..."; \
-			for pkg in build-essential git pandoc inkscape graphviz; do \
-				if command -v $$pkg >/dev/null 2>&1 || dpkg -s $$pkg >/dev/null 2>&1; then \
-					echo "  $$pkg: Available"; \
-				else \
-					echo "  $$pkg: Not available (skipped)"; \
-				fi; \
-			done; \
-		fi; \
-		\
-		if [ "$$INTERNET_OK" = true ] && [ "$$REPOS_OK" = true ]; then \
-			echo "Installing GitHub CLI..."; \
-			if ! dpkg -s gh >/dev/null 2>&1; then \
-				curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg 2>/dev/null | $$SUDO gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg 2>/dev/null \
-				&& echo "deb [arch=$$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | $$SUDO tee /etc/apt/sources.list.d/github-cli.list >/dev/null 2>&1 \
-				&& $$SUDO apt update >/dev/null 2>&1 \
-				&& $$SUDO apt install gh -y >/dev/null 2>&1; \
-				echo "GitHub CLI installation completed."; \
 			else \
-				echo "gh already installed."; \
+				echo "$$pkg already installed."; \
+			fi; \
+		done; \
+		echo ""; \
+		\
+		# Install document processing and visualization tools \
+		echo "Installing document processing and visualization tools..."; \
+		for pkg in pandoc inkscape graphviz; do \
+			if ! dpkg -s $$pkg >/dev/null 2>&1; then \
+				echo "Attempting to install $$pkg..."; \
+				if $$SUDO apt-get install -y $$pkg; then \
+					echo "✅ $$pkg: INSTALLATION SUCCESS"; \
+				else \
+					echo "❌ $$pkg: INSTALLATION FAILED"; \
+					echo "  Note: Core functionality will work without this package."; \
+				fi; \
+			else \
+				echo "$$pkg already installed."; \
+			fi; \
+		done; \
+		echo ""; \
+		\
+		# Final verification \
+		echo "=== Package Installation Summary ==="; \
+		for pkg in build-essential git pandoc inkscape graphviz; do \
+			printf "%-20s: " "$$pkg"; \
+			if command -v $$pkg >/dev/null 2>&1; then \
+				echo "✅ COMMAND AVAILABLE"; \
+			elif dpkg -s $$pkg >/dev/null 2>&1; then \
+				echo "✅ PACKAGE INSTALLED"; \
+			else \
+				echo "❌ NOT AVAILABLE"; \
+			fi; \
+		done; \
+		\
+		# Install GitHub CLI \
+		echo "Installing GitHub CLI..."; \
+		if ! dpkg -s gh >/dev/null 2>&1; then \
+			if curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg 2>/dev/null | $$SUDO gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg 2>/dev/null \
+			&& echo "deb [arch=$$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | $$SUDO tee /etc/apt/sources.list.d/github-cli.list >/dev/null 2>&1 \
+			&& $$SUDO apt update >/dev/null 2>&1 \
+			&& $$SUDO apt install gh -y >/dev/null 2>&1; then \
+				echo "✅ GitHub CLI: INSTALLATION SUCCESS"; \
+			else \
+				echo "❌ GitHub CLI: INSTALLATION FAILED"; \
+				echo "  Note: Core functionality will work without GitHub CLI."; \
 			fi; \
 		else \
-			echo "Skipping GitHub CLI installation (network restricted)."; \
-			if command -v gh >/dev/null 2>&1; then \
-				echo "GitHub CLI: Available"; \
-			else \
-				echo "GitHub CLI: Not available (skipped)"; \
-			fi; \
+			echo "gh already installed."; \
 		fi; \
 		\
 		echo "Checking for conda installation..."; \
